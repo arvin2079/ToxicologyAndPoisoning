@@ -7,11 +7,8 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.ConnectivityManager;
-import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Handler;
 import android.view.View;
-import android.widget.Spinner;
 
 import com.github.ybq.android.spinkit.SpinKitView;
 import com.google.firebase.database.DataSnapshot;
@@ -22,9 +19,10 @@ import com.google.firebase.database.ValueEventListener;
 import com.tetha.toxicologyandpoisoning.R;
 import com.tetha.toxicologyandpoisoning.model.CategoryModel;
 import com.tetha.toxicologyandpoisoning.model.ItemModel;
+import com.tetha.toxicologyandpoisoning.model.LinkerModel;
 
+import java.lang.reflect.Array;
 import java.util.ArrayList;
-import java.util.Arrays;
 
 
 public class SplashScreenActivity extends AppCompatActivity {
@@ -32,7 +30,7 @@ public class SplashScreenActivity extends AppCompatActivity {
     AlertDialog dialog;
     SpinKitView progress_bar;
 
-    public static ArrayList<String> categories = new ArrayList<>();
+    public static ArrayList<LinkerModel> linker = new ArrayList<>();
     public static ArrayList<String> links = new ArrayList<>();
     public static ArrayList<String> titles = new ArrayList<>();
 
@@ -83,34 +81,43 @@ public class SplashScreenActivity extends AppCompatActivity {
         databaseReference.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                int numberOfToxins = Integer.parseInt((String.valueOf((dataSnapshot.child("connectors").getChildrenCount()))));
+                int mainCategoryCounter=0;
 
-
-                for (int i = 0; i < numberOfToxins; i++) {
-
-
-                    // Read Category Data
-                    int categoryId = Integer.parseInt(String.valueOf(dataSnapshot.child("connectors").child(String.valueOf(i)).child("categoryId").getValue()));
-                    String categoryTitle = (String) dataSnapshot.child("categories").child(String.valueOf(categoryId)).child("title").getValue();
-                    int categoryType = Integer.parseInt(String.valueOf(dataSnapshot.child("categories").child(String.valueOf(categoryId)).child("type").getValue()));
-
-                    // Read Item data
-                    String itemId = String.valueOf(dataSnapshot.child("connectors").child(String.valueOf(i)).child("toxinId").getValue());
-                    String itemTitle = String.valueOf(dataSnapshot.child("toxins").child(String.valueOf(itemId)).child("title").getValue());
-                    String itemDescription = String.valueOf(dataSnapshot.child("toxins").child(String.valueOf(itemId)).child("description").getValue());
-
-                    try {
-                        // Add item if category exists
-                        CategoryModel category = categoryModels.get(categoryId);
-                        category.addItem(new ItemModel(itemTitle, itemDescription));
-                    } catch (Exception e) {
-                        // Add new category and item
-                        categoryModels.add(new CategoryModel(categoryTitle, categoryType));
-                        CategoryModel category = categoryModels.get(categoryId);
-                        category.addItem(new ItemModel(itemTitle, itemDescription));
-                    }
-
+                // Read Categories
+                for (DataSnapshot snapshot:dataSnapshot.child("categories").getChildren()){
+                    String title = String.valueOf( snapshot.child("title").getValue() );
+                    int parentId = Integer.parseInt(String.valueOf( snapshot.child("parentId").getValue()) );
+                    int id = categoryModels.size();
+                    categoryModels.add(new CategoryModel(title, parentId, id));
+                    if(parentId == -1) mainCategoryCounter++;
                 }
+
+                // Read Connectors
+                for (DataSnapshot snapshot: dataSnapshot.child("connectors").getChildren()){
+                    int toxinId = Integer.parseInt(String.valueOf(snapshot.child("toxinId").getValue()));
+                    int categoryId = Integer.parseInt(String.valueOf(snapshot.child("categoryId").getValue()));
+
+                    String title = String.valueOf( dataSnapshot.child("toxins").child(String.valueOf(toxinId)).child("title").getValue() );
+                    String description = String.valueOf( dataSnapshot.child("toxins").child(String.valueOf(toxinId)).child("description").getValue() );
+
+                    ItemModel item = new ItemModel(title, description);
+
+                    categoryModels.get(categoryId).addItem(item);
+                }
+
+//                System.out.println("here here");
+//                for(CategoryModel model : categoryModels) {
+//                    System.out.println("parent id : " + model.getParentId());
+//                    System.out.println("id : " + model.getId());
+//
+//                    for (ItemModel model1 : model.getItems()) {
+//                        System.out.println("    model " + model.getParentId() + " | item id : " + model.getId() + " --> " + model1.getTitle());
+//
+//                    }
+//                    System.out.println("-----------------------------------------");
+//                }
+
+                linker = makeLinker(mainCategoryCounter);
 
                 for (DataSnapshot snapshot: dataSnapshot.child("videos").getChildren()){
 
@@ -129,4 +136,20 @@ public class SplashScreenActivity extends AppCompatActivity {
             }
         });
     }
+
+    private ArrayList<LinkerModel> makeLinker(int mainCategoryCounter) {
+        ArrayList<LinkerModel> linkerModels = new ArrayList<>();
+        for(int i=0 ; i<mainCategoryCounter ; i++) {
+            ArrayList<CategoryModel> arrayList = new ArrayList<>();
+            for(CategoryModel model : categoryModels) {
+                if(model.getParentId() == i)
+                    arrayList.add(model);
+
+            }
+            linkerModels.add(new LinkerModel(i, arrayList));
+
+        }
+        return linkerModels;
+    }
+
 }
